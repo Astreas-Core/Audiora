@@ -432,11 +432,12 @@ fun PlayerScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Equalizer", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
-                // Equalizer is already initialized by PlaybackService with the correct audioSessionId
                 
                 val bands = equalizerRepository.getBands()
-                if (bands.isEmpty()) {
+                if (!equalizerRepository.isSupported) {
                     Text("Equalizer not supported on this device.")
+                } else if (!equalizerRepository.isInitialized || bands.isEmpty()) {
+                    Text("Play music to enable equalizer.")
                 } else {
                     androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(bands.size) { index ->

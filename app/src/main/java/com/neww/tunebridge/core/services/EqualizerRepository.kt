@@ -4,17 +4,23 @@ import android.media.audiofx.Equalizer
 
 class EqualizerRepository {
     private var equalizer: Equalizer? = null
+    var isSupported: Boolean = true
+    var isInitialized: Boolean = false
     
     fun initEqualizer(audioSessionId: Int) {
+        if (audioSessionId <= 0) return
         try {
             if (equalizer != null) {
                 equalizer?.release()
             }
             equalizer = Equalizer(0, audioSessionId)
             equalizer?.enabled = true
+            isInitialized = true
+            isSupported = true
         } catch (e: Exception) {
             e.printStackTrace()
             equalizer = null
+            isSupported = false
         }
     }
     

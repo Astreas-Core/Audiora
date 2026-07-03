@@ -163,14 +163,14 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Default.Update,
                     title = if (isCheckingUpdate) "Checking for Updates..." else "Check for Updates",
-                    subtitle = "Version 1.0.0",
+                    subtitle = "Version 1.0.1",
                     onClick = { 
                         if (!isCheckingUpdate) {
                             coroutineScope.launch {
                                 isCheckingUpdate = true
                                 val info = updateService.checkForUpdates()
                                 isCheckingUpdate = false
-                                if (info != null && info.version != "v1.0.0") {
+                                if (info != null && info.version != "v1.0.1") {
                                     updateInfo = info
                                     showUpdateDialog = true
                                 } else {

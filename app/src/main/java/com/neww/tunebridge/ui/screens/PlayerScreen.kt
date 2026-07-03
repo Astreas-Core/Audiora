@@ -518,7 +518,7 @@ fun PlayerScreen(
                                                 rotationZ = -90f
                                                 transformOrigin = TransformOrigin(0.5f, 0.5f)
                                             }
-                                            .width(200.dp)
+                                            .requiredWidth(160.dp)
                                     )
                                 }
                                 

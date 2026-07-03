@@ -53,6 +53,9 @@ class EqualizerRepository(
             for (i in 0 until numPresets) {
                 equalizer?.getPresetName(i.toShort())?.let { presetList.add(it) }
             }
+            if (!presetList.contains("Bass Boost")) {
+                presetList.add("Bass Boost")
+            }
             presetList.add("Custom")
             _presets.value = presetList
 
@@ -77,7 +80,9 @@ class EqualizerRepository(
         val savedPreset = settingsRepository.eqPresetFlow.first()
         val savedBandsJson = settingsRepository.eqBandsFlow.first()
         
-        if (savedPreset != "Custom" && _presets.value.contains(savedPreset)) {
+        if (savedPreset == "Bass Boost") {
+            applyBassBoost(eq)
+        } else if (savedPreset != "Custom" && _presets.value.contains(savedPreset)) {
             val presetIndex = _presets.value.indexOf(savedPreset)
             if (presetIndex >= 0 && presetIndex < (eq.numberOfPresets ?: 0)) {
                 eq.usePreset(presetIndex.toShort())
@@ -85,9 +90,10 @@ class EqualizerRepository(
             }
         } else if (savedBandsJson.isNotBlank() && savedBandsJson != "{}") {
             try {
-                val type = object : TypeToken<Map<Short, Short>>() {}.type
-                val savedBands: Map<Short, Short> = gson.fromJson(savedBandsJson, type)
-                for ((band, level) in savedBands) {
+                val type = object : TypeToken<Map<String, Short>>() {}.type
+                val savedBands: Map<String, Short> = gson.fromJson(savedBandsJson, type)
+                for ((bandStr, level) in savedBands) {
+                    val band = bandStr.toShortOrNull() ?: continue
                     if (band < eq.numberOfBands) {
                         eq.setBandLevel(band, level)
                     }
@@ -105,12 +111,32 @@ class EqualizerRepository(
             scope.launch { settingsRepository.setEqPreset("Custom") }
             return
         }
+        if (presetName == "Bass Boost") {
+            applyBassBoost(eq)
+            scope.launch { settingsRepository.setEqPreset("Bass Boost") }
+            return
+        }
         val presetIndex = _presets.value.indexOf(presetName)
         if (presetIndex >= 0 && presetIndex < eq.numberOfPresets) {
             eq.usePreset(presetIndex.toShort())
             eqUpdateTrigger.value++
             scope.launch { settingsRepository.setEqPreset(presetName) }
         }
+    }
+    
+    private fun applyBassBoost(eq: Equalizer) {
+        for (i in 0 until eq.numberOfBands) {
+            val band = i.toShort()
+            val freq = eq.getCenterFreq(band)
+            if (freq < 150000) { // < 150Hz
+                eq.setBandLevel(band, 1500.toShort())
+            } else if (freq < 300000) { // < 300Hz
+                eq.setBandLevel(band, 700.toShort())
+            } else {
+                eq.setBandLevel(band, 0.toShort())
+            }
+        }
+        eqUpdateTrigger.value++
     }
     
     fun getBands(): List<Short> {
@@ -136,10 +162,10 @@ class EqualizerRepository(
     
     private suspend fun saveCustomBands() {
         val eq = equalizer ?: return
-        val map = mutableMapOf<Short, Short>()
+        val map = mutableMapOf<String, Short>()
         for (i in 0 until eq.numberOfBands) {
             val band = i.toShort()
-            map[band] = eq.getBandLevel(band)
+            map[band.toString()] = eq.getBandLevel(band)
         }
         val json = gson.toJson(map)
         settingsRepository.setEqBands(json)

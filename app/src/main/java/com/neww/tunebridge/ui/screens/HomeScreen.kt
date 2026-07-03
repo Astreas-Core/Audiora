@@ -57,9 +57,10 @@ fun HomeScreen(
         while (true) {
             val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
             greeting = when {
-                hour < 12 -> "Good Morning"
-                hour < 18 -> "Good Afternoon"
-                else -> "Good Evening"
+                hour in 5..11 -> "Good Morning"
+                hour in 12..17 -> "Good Afternoon"
+                hour in 18..21 -> "Good Evening"
+                else -> "Good Night"
             }
             kotlinx.coroutines.delay(60000)
         }

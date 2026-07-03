@@ -66,7 +66,7 @@ class SpotifyScraper(private val okHttpClient: OkHttpClient, private val gson: G
         for (source in coverArt) {
             val map = source as? Map<String, Any> ?: continue
             val w = (map["width"] as? Double)?.toInt() ?: 0
-            if (w > maxWidth) {
+            if (w >= maxWidth) {
                 maxWidth = w
                 largestImage = map
             }
@@ -92,7 +92,15 @@ class SpotifyScraper(private val okHttpClient: OkHttpClient, private val gson: G
         val entity = fetchEntity(type, id) ?: throw Exception("Could not fetch entity for $type")
         
         val coverArtSources = (entity["coverArt"] as? Map<String, Any>)?.get("sources") as? List<Any>
-        val playlistImageUrl = getLargestImageUrl(coverArtSources)
+        var playlistImageUrl = getLargestImageUrl(coverArtSources)
+        
+        if (playlistImageUrl == null) {
+            val images = entity["images"] as? List<Any>
+            playlistImageUrl = getLargestImageUrl(images)
+        }
+        if (playlistImageUrl == null) {
+            playlistImageUrl = entity["thumbnailUrl"] as? String
+        }
         
         // Extract trackList carefully since Gson parses it as ArrayList<LinkedTreeMap>
         val trackListRaw = entity["trackList"] as? List<*>

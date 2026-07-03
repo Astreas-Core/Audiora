@@ -433,11 +433,15 @@ fun PlayerScreen(
                 Text("Equalizer", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
                 
+                val isSupported by equalizerRepository.isSupported.collectAsState()
+                val isInitialized by equalizerRepository.isInitialized.collectAsState()
+                val lastError by equalizerRepository.lastError.collectAsState()
+                
                 val bands = equalizerRepository.getBands()
-                if (!equalizerRepository.isSupported) {
-                    Text("Equalizer not supported on this device.")
-                } else if (!equalizerRepository.isInitialized || bands.isEmpty()) {
-                    Text("Play music to enable equalizer.")
+                if (!isSupported) {
+                    Text("Equalizer not supported on this device.\nError: $lastError")
+                } else if (!isInitialized || bands.isEmpty()) {
+                    Text("Play music to enable equalizer.\nStatus: ${lastError ?: "Waiting for playback..."}")
                 } else {
                     androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxWidth()) {
                         items(bands.size) { index ->

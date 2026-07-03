@@ -37,6 +37,17 @@ class PlaybackService : MediaLibraryService() {
             }
         })
 
+        player?.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) {
+                    val sessionId = player?.audioSessionId ?: 0
+                    if (sessionId != 0 && !equalizerRepository.isInitialized.value) {
+                        equalizerRepository.initEqualizer(sessionId)
+                    }
+                }
+            }
+        })
+
         mediaSession = MediaLibrarySession.Builder(this, player!!, Callback())
             .build()
     }

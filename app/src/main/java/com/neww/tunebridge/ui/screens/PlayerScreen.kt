@@ -20,6 +20,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
@@ -436,6 +440,9 @@ fun PlayerScreen(
                 val isSupported by equalizerRepository.isSupported.collectAsState()
                 val isInitialized by equalizerRepository.isInitialized.collectAsState()
                 val lastError by equalizerRepository.lastError.collectAsState()
+                val currentPreset by equalizerRepository.currentPreset.collectAsState(initial = "Custom")
+                val eqTrigger by equalizerRepository.eqUpdateTrigger.collectAsState()
+                val presets by equalizerRepository.presets.collectAsState()
                 
                 val bands = equalizerRepository.getBands()
                 if (!isSupported) {
@@ -443,54 +450,84 @@ fun PlayerScreen(
                 } else if (!isInitialized || bands.isEmpty()) {
                     Text("Play music to enable equalizer.\nStatus: ${lastError ?: "Waiting for playback..."}")
                 } else {
-                    androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(bands.size) { index ->
-                            val band = bands[index]
-                            var level by remember(band) { mutableStateOf(equalizerRepository.getBandLevel(band)) }
-                            val range = equalizerRepository.getBandLevelRange() ?: shortArrayOf(0, 0)
-                            val freq = equalizerRepository.getCenterFreq(band) / 1000
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (freq >= 1000) "${freq/1000} kHz" else "$freq Hz",
-                                    modifier = Modifier.width(60.dp),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                Slider(
-                                    value = level.toFloat(),
-                                    onValueChange = {
-                                        level = it.toInt().toShort()
-                                        equalizerRepository.setBandLevel(band, level)
-                                    },
-                                    valueRange = range[0].toFloat()..range[1].toFloat(),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Text(
-                                    text = "${level / 100} dB",
-                                    modifier = Modifier.width(60.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.End
+                    var expanded by remember { mutableStateOf(false) }
+                    
+                    Box(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Preset: $currentPreset")
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier.fillMaxWidth(0.9f).heightIn(max = 300.dp)
+                        ) {
+                            presets.forEach { preset ->
+                                DropdownMenuItem(
+                                    text = { Text(preset) },
+                                    onClick = {
+                                        equalizerRepository.applyPreset(preset)
+                                        expanded = false
+                                    }
                                 )
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Button(onClick = {
-                            for (b in bands) {
-                                equalizerRepository.setBandLevel(b, 1000)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(250.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        for (band in bands) {
+                            var level by remember(band, eqTrigger) { mutableStateOf(equalizerRepository.getBandLevel(band)) }
+                            val range = equalizerRepository.getBandLevelRange() ?: shortArrayOf(0, 0)
+                            val freq = equalizerRepository.getCenterFreq(band) / 1000
+                            
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (level > 0) "+${level / 100}dB" else "${level / 100}dB",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .width(40.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Slider(
+                                        value = level.toFloat(),
+                                        onValueChange = {
+                                            level = it.toInt().toShort()
+                                            equalizerRepository.setBandLevel(band, level)
+                                        },
+                                        valueRange = range[0].toFloat()..range[1].toFloat(),
+                                        modifier = Modifier
+                                            .graphicsLayer {
+                                                rotationZ = -90f
+                                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                            }
+                                            .width(200.dp)
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = if (freq >= 1000) "${freq/1000}k" else "$freq Hz",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
-                        }) {
-                            Text("Bass Boost")
-                        }
-                        Button(onClick = {
-                            for (b in bands) {
-                                equalizerRepository.setBandLevel(b, 0)
-                            }
-                        }) {
-                            Text("Flat")
                         }
                     }
                 }

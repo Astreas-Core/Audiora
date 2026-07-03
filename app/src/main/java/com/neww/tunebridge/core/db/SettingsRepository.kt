@@ -19,6 +19,8 @@ class SettingsRepository(private val context: Context) {
         val FADE_IN_KEY = androidx.datastore.preferences.core.intPreferencesKey("fade_in")
         val FADE_OUT_KEY = androidx.datastore.preferences.core.intPreferencesKey("fade_out")
         val ACCENT_COLOR_KEY = stringPreferencesKey("accent_color")
+        val EQ_PRESET_KEY = stringPreferencesKey("eq_preset")
+        val EQ_BANDS_KEY = stringPreferencesKey("eq_bands")
     }
 
     val audioQualityFlow: Flow<String> = context.settingsDataStore.data
@@ -37,9 +39,19 @@ class SettingsRepository(private val context: Context) {
     val fadeOutFlow: Flow<Int> = context.settingsDataStore.data
         .map { preferences -> preferences[FADE_OUT_KEY] ?: 0 }
         
-    val accentColorFlow: Flow<String> = context.settingsDataStore.data
+        val accentColorFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
             preferences[ACCENT_COLOR_KEY] ?: "#1DA1F2" // Default accent
+        }
+        
+    val eqPresetFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[EQ_PRESET_KEY] ?: "Custom"
+        }
+        
+    val eqBandsFlow: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[EQ_BANDS_KEY] ?: "{}"
         }
 
     suspend fun setAudioQuality(quality: String) {
@@ -69,6 +81,18 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAccentColor(hexColor: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[ACCENT_COLOR_KEY] = hexColor
+        }
+    }
+    
+    suspend fun setEqPreset(preset: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EQ_PRESET_KEY] = preset
+        }
+    }
+    
+    suspend fun setEqBands(bandsJson: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[EQ_BANDS_KEY] = bandsJson
         }
     }
 }

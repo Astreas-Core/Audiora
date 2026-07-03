@@ -31,7 +31,7 @@ val appModule = module {
     
     single { com.neww.tunebridge.core.services.UpdateRepository(get()) }
     
-    single { com.neww.tunebridge.core.services.EqualizerRepository() }
+    single { com.neww.tunebridge.core.services.EqualizerRepository(get(), get()) }
 
     single { com.neww.tunebridge.core.player.PlayerController(androidContext(), get(), get(), get(), get()) }
 }

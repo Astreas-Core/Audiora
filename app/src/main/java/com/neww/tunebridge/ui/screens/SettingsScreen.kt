@@ -8,8 +8,13 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,6 +24,10 @@ import androidx.compose.ui.unit.dp
 import com.neww.tunebridge.core.db.SettingsRepository
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import android.content.Intent
+import android.net.Uri
+import com.neww.tunebridge.core.services.UpdateService
+import com.neww.tunebridge.core.services.UpdateInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,8 +38,16 @@ fun SettingsScreen(
     val coroutineScope = rememberCoroutineScope()
     val audioQuality by settingsRepository.audioQualityFlow.collectAsState(initial = "Auto")
     val theme by settingsRepository.themeFlow.collectAsState(initial = "System Default")
+    val accentColor by settingsRepository.accentColorFlow.collectAsState(initial = "#1DA1F2")
 
     var showQualitySheet by remember { mutableStateOf(false) }
+    
+    val updateService = remember { UpdateService() }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var showNoUpdateDialog by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Scaffold(
         topBar = {
@@ -62,39 +79,24 @@ fun SettingsScreen(
                     onClick = { showQualitySheet = true }
                 )
                 
-                val crossfadeEnabled by settingsRepository.crossfadeEnabledFlow.collectAsState(initial = true)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Audiotrack,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(24.dp)
+                val fadeIn by settingsRepository.fadeInFlow.collectAsState(initial = 0)
+                val fadeOut by settingsRepository.fadeOutFlow.collectAsState(initial = 0)
+                
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp)) {
+                    Text("Fade In (${fadeIn}s)", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                    Slider(
+                        value = fadeIn.toFloat(),
+                        onValueChange = { coroutineScope.launch { settingsRepository.setFadeIn(it.toInt()) } },
+                        valueRange = 0f..10f,
+                        steps = 9
                     )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Crossfade Playback",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            text = "Smoothly fade volume between tracks",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = crossfadeEnabled,
-                        onCheckedChange = {
-                            coroutineScope.launch {
-                                settingsRepository.setCrossfadeEnabled(it)
-                            }
-                        }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Fade Out (${fadeOut}s)", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                    Slider(
+                        value = fadeOut.toFloat(),
+                        onValueChange = { coroutineScope.launch { settingsRepository.setFadeOut(it.toInt()) } },
+                        valueRange = 0f..10f,
+                        steps = 9
                     )
                 }
             }
@@ -116,6 +118,34 @@ fun SettingsScreen(
                         }
                     }
                 )
+                
+                val colors = listOf("#1DA1F2", "#E91E63", "#4CAF50", "#FF9800", "#9C27B0", "#F44336")
+                SettingsCategory(title = "Accent Color")
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    colors.forEach { hex ->
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(android.graphics.Color.parseColor(hex)))
+                                .clickable {
+                                    coroutineScope.launch { settingsRepository.setAccentColor(hex) }
+                                }
+                        ) {
+                            if (accentColor == hex) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.align(Alignment.Center).size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
             
             item {
@@ -132,12 +162,61 @@ fun SettingsScreen(
                 SettingsCategory(title = "About")
                 SettingsItem(
                     icon = Icons.Default.Update,
-                    title = "Check for Updates",
+                    title = if (isCheckingUpdate) "Checking for Updates..." else "Check for Updates",
                     subtitle = "Version 1.0.0",
-                    onClick = { /* OTA Logic */ }
+                    onClick = { 
+                        if (!isCheckingUpdate) {
+                            coroutineScope.launch {
+                                isCheckingUpdate = true
+                                val info = updateService.checkForUpdates()
+                                isCheckingUpdate = false
+                                if (info != null && info.version != "v1.0.0") {
+                                    updateInfo = info
+                                    showUpdateDialog = true
+                                } else {
+                                    showNoUpdateDialog = true
+                                }
+                            }
+                        }
+                    }
                 )
             }
         }
+    }
+    
+    if (showUpdateDialog && updateInfo != null) {
+        AlertDialog(
+            onDismissRequest = { showUpdateDialog = false },
+            title = { Text("Update Available: ${updateInfo?.version}") },
+            text = { Text("Release Notes:\n\n${updateInfo?.releaseNotes}") },
+            confirmButton = {
+                TextButton(onClick = { 
+                    showUpdateDialog = false
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo?.downloadUrl))
+                    context.startActivity(intent)
+                }) {
+                    Text("Download")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUpdateDialog = false }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
+    if (showNoUpdateDialog) {
+        AlertDialog(
+            onDismissRequest = { showNoUpdateDialog = false },
+            title = { Text("Up to date") },
+            text = { Text("You are already on the latest version.") },
+            confirmButton = {
+                TextButton(onClick = { showNoUpdateDialog = false }) {
+                    Text("OK")
+                }
+            }
+        )
     }
 
     if (showQualitySheet) {

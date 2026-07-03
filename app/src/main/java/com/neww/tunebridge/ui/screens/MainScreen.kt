@@ -25,12 +25,13 @@ import com.neww.tunebridge.ui.components.MiniPlayer
 fun MainScreen() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route ?: "home"
+    val currentRoute = navBackStackEntry?.destination?.route ?: "splash"
     val isPlayerScreen = currentRoute == "player"
+    val isSplashScreen = currentRoute == "splash"
 
     Scaffold(
         bottomBar = {
-            if (!isPlayerScreen) {
+            if (!isPlayerScreen && !isSplashScreen) {
                 Column {
                     MiniPlayer(onExpand = { navController.navigate("player") })
                     NavigationBar(
@@ -44,28 +45,9 @@ fun MainScreen() {
                             onClick = {
                                 if (currentRoute != "home") {
                                     navController.navigate("home") {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                        popUpTo(navController.graph.startDestinationId) { saveState = false }
                                         launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                }
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = MaterialTheme.colorScheme.primary,
-                                selectedTextColor = MaterialTheme.colorScheme.primary,
-                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library") },
-                            label = { Text("Library") },
-                            selected = currentRoute == "library",
-                            onClick = {
-                                if (currentRoute != "library") {
-                                    navController.navigate("library") {
-                                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                        restoreState = false
                                     }
                                 }
                             },
@@ -94,17 +76,44 @@ fun MainScreen() {
                                 indicatorColor = MaterialTheme.colorScheme.surfaceVariant
                             )
                         )
+                        NavigationBarItem(
+                            icon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Library") },
+                            label = { Text("Library") },
+                            selected = currentRoute == "library",
+                            onClick = {
+                                if (currentRoute != "library") {
+                                    navController.navigate("library") {
+                                        popUpTo(navController.graph.startDestinationId) { saveState = false }
+                                        launchSingleTop = true
+                                        restoreState = false
+                                    }
+                                }
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        )
                     }
                 }
             }
         }
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
-            NavHost(navController = navController, startDestination = "home") {
+            NavHost(navController = navController, startDestination = "splash") {
+                composable("splash") {
+                    SplashScreen(onTimeout = {
+                        navController.navigate("home") {
+                            popUpTo("splash") { inclusive = true }
+                        }
+                    })
+                }
                 composable("home") { 
                     HomeScreen(
                         onNavigateToSettings = { navController.navigate("settings") },
-                        onNavigateToSearch = { query -> navController.navigate("search?query=$query") }
+                        onNavigateToSearch = { query -> navController.navigate("search?query=$query") },
+                        onNavigateToPlaylist = { id -> navController.navigate("playlist/$id") }
                     ) 
                 }
                 composable("settings") {

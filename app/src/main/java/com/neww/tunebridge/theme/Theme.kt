@@ -14,6 +14,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import com.neww.tunebridge.core.db.SettingsRepository
 
 private val PremiumDarkColorScheme = darkColorScheme(
     primary = DarkPrimary,
@@ -44,7 +49,14 @@ fun TuneBridgeTheme(
     darkTheme: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) PremiumDarkColorScheme else PremiumLightColorScheme
+    val context = LocalContext.current
+    val settingsRepository = remember { SettingsRepository(context) }
+    val accentColorHex by settingsRepository.accentColorFlow.collectAsState(initial = "#1DA1F2")
+    
+    val accentColor = try { Color(android.graphics.Color.parseColor(accentColorHex)) } catch (e: Exception) { DarkPrimary }
+
+    val baseColorScheme = if (darkTheme) PremiumDarkColorScheme else PremiumLightColorScheme
+    val colorScheme = baseColorScheme.copy(primary = accentColor)
 
     val view = LocalView.current
     if (!view.isInEditMode) {

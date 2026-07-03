@@ -23,7 +23,7 @@ val appModule = module {
 
     single { SpotifyScraper(get(), get()) }
 
-    single { com.neww.tunebridge.core.services.YouTubeScraper(get(), get()) }
+    single { com.neww.tunebridge.core.services.YouTubeScraper(get(), get(), get()) }
 
     single { com.neww.tunebridge.core.services.LyricsRepository(androidContext(), get(), get()) }
 

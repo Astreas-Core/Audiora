@@ -3,6 +3,7 @@ package com.neww.tunebridge.core.player
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
@@ -27,6 +28,7 @@ class PlaybackService : MediaLibraryService() {
                 true // handle audio focus
             )
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
 
         player?.addAnalyticsListener(object : AnalyticsListener {
@@ -52,7 +54,27 @@ class PlaybackService : MediaLibraryService() {
         super.onDestroy()
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        player?.pause()
+        player?.stop()
+        player?.release()
+        stopSelf()
+        android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
     private inner class Callback : MediaLibrarySession.Callback {
-        // Implement callbacks for custom library browsing if needed
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo
+        ): MediaSession.ConnectionResult {
+            val connectionResult = super.onConnect(session, controller)
+            val availablePlayerCommands = connectionResult.availablePlayerCommands.buildUpon()
+                .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                .add(Player.COMMAND_SEEK_BACK)
+                .add(Player.COMMAND_SEEK_FORWARD)
+                .build()
+            return MediaSession.ConnectionResult.accept(connectionResult.availableSessionCommands, availablePlayerCommands)
+        }
     }
 }

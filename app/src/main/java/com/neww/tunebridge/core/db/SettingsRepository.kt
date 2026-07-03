@@ -16,7 +16,9 @@ class SettingsRepository(private val context: Context) {
     companion object {
         val AUDIO_QUALITY_KEY = stringPreferencesKey("audio_quality")
         val THEME_KEY = stringPreferencesKey("theme")
-        val CROSSFADE_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("crossfade")
+        val FADE_IN_KEY = androidx.datastore.preferences.core.intPreferencesKey("fade_in")
+        val FADE_OUT_KEY = androidx.datastore.preferences.core.intPreferencesKey("fade_out")
+        val ACCENT_COLOR_KEY = stringPreferencesKey("accent_color")
     }
 
     val audioQualityFlow: Flow<String> = context.settingsDataStore.data
@@ -29,9 +31,15 @@ class SettingsRepository(private val context: Context) {
             preferences[THEME_KEY] ?: "System Default"
         }
 
-    val crossfadeEnabledFlow: Flow<Boolean> = context.settingsDataStore.data
+    val fadeInFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FADE_IN_KEY] ?: 0 }
+        
+    val fadeOutFlow: Flow<Int> = context.settingsDataStore.data
+        .map { preferences -> preferences[FADE_OUT_KEY] ?: 0 }
+        
+    val accentColorFlow: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[CROSSFADE_KEY] ?: true
+            preferences[ACCENT_COLOR_KEY] ?: "#1DA1F2" // Default accent
         }
 
     suspend fun setAudioQuality(quality: String) {
@@ -46,9 +54,21 @@ class SettingsRepository(private val context: Context) {
         }
     }
 
-    suspend fun setCrossfadeEnabled(enabled: Boolean) {
+    suspend fun setFadeIn(seconds: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[CROSSFADE_KEY] = enabled
+            preferences[FADE_IN_KEY] = seconds
+        }
+    }
+    
+    suspend fun setFadeOut(seconds: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FADE_OUT_KEY] = seconds
+        }
+    }
+    
+    suspend fun setAccentColor(hexColor: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ACCENT_COLOR_KEY] = hexColor
         }
     }
 }

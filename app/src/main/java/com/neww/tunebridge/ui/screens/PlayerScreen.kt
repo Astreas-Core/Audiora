@@ -38,7 +38,8 @@ fun PlayerScreen(
     onNavigateBack: () -> Unit = {},
     playerController: PlayerController = koinInject(),
     downloadRepository: com.neww.tunebridge.core.services.DownloadRepository = koinInject(),
-    equalizerRepository: com.neww.tunebridge.core.services.EqualizerRepository = koinInject()
+    equalizerRepository: com.neww.tunebridge.core.services.EqualizerRepository = koinInject(),
+    libraryRepository: com.neww.tunebridge.core.db.LocalLibraryRepository = koinInject()
 ) {
     val currentTrack by playerController.currentTrack.collectAsState()
     val isPlaying by playerController.isPlaying.collectAsState()
@@ -431,10 +432,7 @@ fun PlayerScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Text("Equalizer", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
-                // Init equalizer locally
-                LaunchedEffect(Unit) {
-                    equalizerRepository.initEqualizer(0)
-                }
+                // Equalizer is already initialized by PlaybackService with the correct audioSessionId
                 
                 val bands = equalizerRepository.getBands()
                 if (bands.isEmpty()) {
@@ -497,25 +495,55 @@ fun PlayerScreen(
     }
 
     if (showMoreMenu) {
+        var showPlaylistSelection by remember { mutableStateOf(false) }
+        val playlists by libraryRepository.getPlaylists().collectAsState(initial = emptyList())
+        val coroutineScope = rememberCoroutineScope()
+
         ModalBottomSheet(onDismissRequest = { showMoreMenu = false }) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Options", style = MaterialTheme.typography.titleLarge)
+                Text(if (showPlaylistSelection) "Select Playlist" else "Options", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
-                ListItem(
-                    headlineContent = { Text("Add to Playlist") },
-                    leadingContent = { Icon(Icons.Default.PlaylistAdd, null) },
-                    modifier = Modifier.clickable { showMoreMenu = false }
-                )
-                ListItem(
-                    headlineContent = { Text("Go to Artist") },
-                    leadingContent = { Icon(Icons.Default.Person, null) },
-                    modifier = Modifier.clickable { showMoreMenu = false }
-                )
-                ListItem(
-                    headlineContent = { Text("Share") },
-                    leadingContent = { Icon(Icons.Default.Share, null) },
-                    modifier = Modifier.clickable { showMoreMenu = false }
-                )
+                
+                if (showPlaylistSelection) {
+                    if (playlists.isEmpty()) {
+                        Text("No playlists available.")
+                    } else {
+                        androidx.compose.foundation.lazy.LazyColumn {
+                            items(playlists.size) { index ->
+                                val playlist = playlists[index]
+                                ListItem(
+                                    headlineContent = { Text(playlist.name) },
+                                    leadingContent = { Icon(Icons.Default.QueueMusic, null) },
+                                    modifier = Modifier.clickable {
+                                        currentTrack?.let { track ->
+                                            coroutineScope.launch {
+                                                val updatedTracks = playlist.tracks.toMutableList()
+                                                if (updatedTracks.none { it.id == track.id }) {
+                                                    updatedTracks.add(track)
+                                                    val updatedPlaylist = playlist.copy(
+                                                        tracks = updatedTracks,
+                                                        trackCount = updatedTracks.size
+                                                    )
+                                                    libraryRepository.savePlaylist(updatedPlaylist)
+                                                    android.widget.Toast.makeText(context, "Added to ${playlist.name}", android.widget.Toast.LENGTH_SHORT).show()
+                                                } else {
+                                                    android.widget.Toast.makeText(context, "Already in ${playlist.name}", android.widget.Toast.LENGTH_SHORT).show()
+                                                }
+                                                showMoreMenu = false
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    ListItem(
+                        headlineContent = { Text("Add to Playlist") },
+                        leadingContent = { Icon(Icons.Default.PlaylistAdd, null) },
+                        modifier = Modifier.clickable { showPlaylistSelection = true }
+                    )
+                }
                 Spacer(modifier = Modifier.height(32.dp))
             }
         }

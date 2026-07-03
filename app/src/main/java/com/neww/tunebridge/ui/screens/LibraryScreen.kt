@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -22,6 +23,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import coil.compose.AsyncImage
 import com.neww.tunebridge.core.db.LocalLibraryRepository
 import com.neww.tunebridge.core.models.PlaylistModel
@@ -41,8 +44,9 @@ fun LibraryScreen(
     downloadRepository: DownloadRepository = koinInject(),
     spotifyScraper: SpotifyScraper = koinInject()
 ) {
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Liked Songs", "Playlists", "Downloads")
+    val pagerState = rememberPagerState(pageCount = { tabs.size })
+    val selectedTabIndex = pagerState.currentPage
 
     val likedSongs by repository.getLikedSongs().collectAsState(initial = emptyList())
     val playlists by repository.getPlaylists().collectAsState(initial = emptyList())
@@ -78,7 +82,7 @@ fun LibraryScreen(
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
                             text = { 
                                 Text(
                                     text = title, 
@@ -127,21 +131,24 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (selectedTabIndex) {
-                0 -> LikedSongsTab(
-                    songs = likedSongs, 
-                    playerController = playerController, 
-                    repository = repository
-                )
-                1 -> PlaylistsTab(
-                    playlists = playlists,
-                    onNavigateToPlaylist = onNavigateToPlaylist
-                )
-                2 -> DownloadsTab(
-                    songs = downloads,
-                    playerController = playerController,
-                    downloadRepository = downloadRepository
-                )
+            HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
+                when (page) {
+                    0 -> LikedSongsTab(
+                        songs = likedSongs, 
+                        playerController = playerController, 
+                        repository = repository
+                    )
+                    1 -> PlaylistsTab(
+                        playlists = playlists,
+                        onNavigateToPlaylist = onNavigateToPlaylist,
+                        repository = repository
+                    )
+                    2 -> DownloadsTab(
+                        songs = downloads,
+                        playerController = playerController,
+                        downloadRepository = downloadRepository
+                    )
+                }
             }
         }
     }
@@ -252,6 +259,26 @@ fun DownloadsTab(
     downloadRepository: DownloadRepository
 ) {
     val coroutineScope = rememberCoroutineScope()
+    var trackToDelete by remember { mutableStateOf<TrackModel?>(null) }
+
+    if (trackToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { trackToDelete = null },
+            title = { Text("Delete Download") },
+            text = { Text("Are you sure you want to remove '${trackToDelete?.title}' from downloads?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = trackToDelete?.id
+                    if (id != null) coroutineScope.launch { downloadRepository.removeDownload(id) }
+                    trackToDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { trackToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (songs.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -275,9 +302,7 @@ fun DownloadsTab(
                     track = song,
                     onClick = { playerController.playQueue(songs, index) },
                     onDelete = {
-                        coroutineScope.launch {
-                            downloadRepository.removeDownload(song.id)
-                        }
+                        trackToDelete = song
                     }
                 )
             }
@@ -292,6 +317,26 @@ fun LikedSongsTab(
     repository: LocalLibraryRepository
 ) {
     val coroutineScope = rememberCoroutineScope()
+    var trackToDelete by remember { mutableStateOf<TrackModel?>(null) }
+
+    if (trackToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { trackToDelete = null },
+            title = { Text("Remove Liked Song") },
+            text = { Text("Are you sure you want to remove '${trackToDelete?.title}' from Liked Songs?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = trackToDelete?.id
+                    if (id != null) coroutineScope.launch { repository.removeLikedSong(id) }
+                    trackToDelete = null
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { trackToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (songs.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -314,9 +359,7 @@ fun LikedSongsTab(
                     track = song,
                     onClick = { playerController.playQueue(songs, index) },
                     onDelete = {
-                        coroutineScope.launch {
-                            repository.removeLikedSong(song.id)
-                        }
+                        trackToDelete = song
                     }
                 )
             }
@@ -327,8 +370,30 @@ fun LikedSongsTab(
 @Composable
 fun PlaylistsTab(
     playlists: List<PlaylistModel>,
-    onNavigateToPlaylist: (String) -> Unit
+    onNavigateToPlaylist: (String) -> Unit,
+    repository: LocalLibraryRepository
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    var playlistToDelete by remember { mutableStateOf<PlaylistModel?>(null) }
+
+    if (playlistToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { playlistToDelete = null },
+            title = { Text("Delete Playlist") },
+            text = { Text("Are you sure you want to delete '${playlistToDelete?.name}'?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    val id = playlistToDelete?.id
+                    if (id != null) coroutineScope.launch { repository.removePlaylist(id) }
+                    playlistToDelete = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { playlistToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
+
     if (playlists.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -351,7 +416,10 @@ fun PlaylistsTab(
             items(playlists) { playlist ->
                 PlaylistCard(
                     playlist = playlist,
-                    onClick = { onNavigateToPlaylist(playlist.id) }
+                    onClick = { onNavigateToPlaylist(playlist.id) },
+                    onDelete = {
+                        playlistToDelete = playlist
+                    }
                 )
             }
         }
@@ -359,36 +427,73 @@ fun PlaylistsTab(
 }
 
 @Composable
-fun PlaylistCard(playlist: PlaylistModel, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-    ) {
-        AsyncImage(
-            model = playlist.imageUrl,
-            contentDescription = "Playlist Art",
+fun PlaylistCard(playlist: PlaylistModel, onClick: () -> Unit, onDelete: () -> Unit) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentScale = ContentScale.Crop
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = playlist.name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1
-        )
-        Text(
-            text = "${playlist.trackCount} tracks",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
+                .clickable(onClick = onClick)
+        ) {
+            val isPlaceholder = playlist.imageUrl == null || playlist.imageUrl.contains("via.placeholder.com")
+            if (isPlaceholder) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(androidx.compose.ui.graphics.Color(0xFF8E24AA)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = playlist.name.firstOrNull()?.uppercase() ?: "P",
+                        style = MaterialTheme.typography.displayMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = androidx.compose.ui.graphics.Color.White
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = playlist.imageUrl,
+                    contentDescription = "Playlist Art",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = playlist.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1
+            )
+            Text(
+                text = "${playlist.trackCount} tracks",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f), CircleShape)
+                .size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete Playlist",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 

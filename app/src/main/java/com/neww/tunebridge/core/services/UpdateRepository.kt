@@ -6,12 +6,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 
-data class UpdateInfo(
-    val version: String,
-    val releaseNotes: String,
-    val downloadUrl: String
-)
-
+// UpdateInfo data class removed to avoid redeclaration with UpdateService.kt
 class UpdateRepository(private val okHttpClient: OkHttpClient) {
 
     // Placeholder repository name - user can update this later

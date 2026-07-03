@@ -14,10 +14,12 @@ import android.text.Html
 import java.net.URLEncoder
 import javax.crypto.Cipher
 import javax.crypto.spec.SecretKeySpec
+import com.neww.tunebridge.core.db.SettingsRepository
+import kotlinx.coroutines.flow.first
 
-class YouTubeScraper(private val okHttpClient: OkHttpClient, private val gson: Gson) {
+class YouTubeScraper(private val okHttpClient: OkHttpClient, private val gson: Gson, private val settingsRepository: SettingsRepository) {
     
-    private fun decryptUrl(encryptedUrl: String): String {
+    private suspend fun decryptUrl(encryptedUrl: String): String {
         try {
             val key = "38346591".toByteArray()
             val cipher = Cipher.getInstance("DES/ECB/PKCS5Padding")
@@ -26,10 +28,19 @@ class YouTubeScraper(private val okHttpClient: OkHttpClient, private val gson: G
             val decryptedBytes = cipher.doFinal(decoded)
             var decrypted = String(decryptedBytes)
             
-            // Upgrade quality to 320kbps
-            decrypted = decrypted.replace("_96_p.mp4", "_320.mp4")
-                .replace("_96_p.m4a", "_320.mp4")
-                .replace("_96.mp4", "_320.mp4")
+            val quality = settingsRepository.audioQualityFlow.first()
+            if (quality == "High") {
+                decrypted = decrypted.replace("_96_p.mp4", "_320.mp4")
+                    .replace("_96_p.m4a", "_320.mp4")
+                    .replace("_96.mp4", "_320.mp4")
+                    .replace("_160.mp4", "_320.mp4")
+            } else if (quality == "Low") {
+                decrypted = decrypted.replace("_320.mp4", "_128.mp4")
+                    .replace("_96_p.mp4", "_128.mp4")
+                    .replace("_96_p.m4a", "_128.mp4")
+                    .replace("_96.mp4", "_128.mp4")
+                    .replace("_160.mp4", "_128.mp4")
+            }
             
             return decrypted
         } catch (e: Exception) {
@@ -72,7 +83,7 @@ class YouTubeScraper(private val okHttpClient: OkHttpClient, private val gson: G
 
     suspend fun search(query: String): List<TrackModel> = withContext(Dispatchers.IO) {
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
-        val url = "https://www.jiosaavn.com/api.php?__call=search.getResults&q=$encodedQuery&n=15&p=1&_format=json&_marker=0&ctx=web6dot0"
+        val url = "https://www.jiosaavn.com/api.php?__call=search.getResults&q=$encodedQuery&n=50&p=1&_format=json&_marker=0&ctx=web6dot0"
         
         val request = Request.Builder()
             .url(url)

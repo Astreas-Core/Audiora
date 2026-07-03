@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -20,7 +22,9 @@ import androidx.compose.ui.unit.dp
 import com.neww.tunebridge.core.db.LocalLibraryRepository
 import com.neww.tunebridge.core.models.PlaylistModel
 import com.neww.tunebridge.core.player.PlayerController
+import com.neww.tunebridge.core.services.DownloadRepository
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -29,8 +33,12 @@ fun PlaylistDetailScreen(
     playlistId: String,
     onNavigateBack: () -> Unit,
     playerController: PlayerController = koinInject(),
-    repository: LocalLibraryRepository = koinInject()
+    repository: LocalLibraryRepository = koinInject(),
+    downloadRepository: DownloadRepository = koinInject()
 ) {
+    val coroutineScope = rememberCoroutineScope()
+    var isDownloading by remember { mutableStateOf(false) }
+
     val playlist by repository.getPlaylists()
         .map { list -> list.find { it.id == playlistId } }
         .collectAsState(initial = null)
@@ -101,16 +109,54 @@ fun PlaylistDetailScreen(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    Button(
-                        onClick = { if (tracks.isNotEmpty()) playerController.playQueue(tracks, 0) },
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(0.8f),
+                        horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Shuffle Play", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = { if (tracks.isNotEmpty()) playerController.playQueue(tracks, 0) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Play", modifier = Modifier.size(24.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Shuffle", fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        val downloads by downloadRepository.downloadedTracks.collectAsState(initial = emptyList())
+                        val allDownloaded = tracks.isNotEmpty() && tracks.all { track -> downloads.any { it.id == track.id } }
+
+                        Button(
+                            onClick = {
+                                if (tracks.isNotEmpty() && !allDownloaded) {
+                                    isDownloading = true
+                                    coroutineScope.launch {
+                                        tracks.forEach { track ->
+                                            if (downloadRepository.getDownloadedFilePath(track.id) == null) {
+                                                downloadRepository.downloadTrack(track)
+                                            }
+                                        }
+                                        isDownloading = false
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(50.dp),
+                            enabled = !isDownloading && !allDownloaded,
+                            contentPadding = PaddingValues(horizontal = 4.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            if (isDownloading) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onSecondary, strokeWidth = 2.dp)
+                            } else {
+                                Icon(if (allDownloaded) Icons.Default.Check else Icons.Default.Download, contentDescription = "Download", modifier = Modifier.size(24.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(if (allDownloaded) "Downloaded" else "Download", fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }

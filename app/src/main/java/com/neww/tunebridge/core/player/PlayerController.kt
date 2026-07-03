@@ -78,20 +78,9 @@ class PlayerController(
                     _isPlaying.value = isPlaying
                     if (isPlaying) {
                         startProgressPolling()
-                        coroutineScope.launch {
-                            val crossfade = settingsRepository.crossfadeEnabledFlow.first()
-                            if (crossfade) {
-                                mediaController?.volume = 0f
-                                for (i in 1..10) {
-                                    delay(30)
-                                    mediaController?.volume = i / 10f
-                                }
-                            } else {
-                                mediaController?.volume = 1f
-                            }
-                        }
                     } else {
                         stopProgressPolling()
+                        mediaController?.volume = 1f
                     }
                 }
 
@@ -118,14 +107,31 @@ class PlayerController(
         progressJob?.cancel()
         progressJob = coroutineScope.launch {
             while (true) {
-                mediaController?.let {
-                    _currentPosition.value = it.currentPosition.coerceAtLeast(0L)
-                    val dur = it.duration
-                    if (dur > 0) {
-                        _duration.value = dur
+                mediaController?.let { player ->
+                    if (player.isPlaying) {
+                        val pos = player.currentPosition
+                        val dur = player.duration
+                        _currentPosition.value = pos.coerceAtLeast(0L)
+                        if (dur > 0) {
+                            _duration.value = dur
+                            
+                            val fadeInSecs = settingsRepository.fadeInFlow.first()
+                            val fadeOutSecs = settingsRepository.fadeOutFlow.first()
+                            
+                            var targetVol = 1.0f
+                            if (fadeInSecs > 0 && pos < fadeInSecs * 1000) {
+                                targetVol = pos.toFloat() / (fadeInSecs * 1000)
+                            } else if (fadeOutSecs > 0 && dur - pos < fadeOutSecs * 1000) {
+                                targetVol = (dur - pos).toFloat() / (fadeOutSecs * 1000)
+                            }
+                            
+                            if (targetVol < 0f) targetVol = 0f
+                            if (targetVol > 1f) targetVol = 1f
+                            player.volume = targetVol
+                        }
                     }
                 }
-                delay(500)
+                delay(100)
             }
         }
     }

@@ -8,7 +8,7 @@ android {
     namespace = "com.neww.tunebridge"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.neww.tunebridge"
+        applicationId = "com.netease.cloudmusic"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
